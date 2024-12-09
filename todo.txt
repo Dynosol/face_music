@@ -1,0 +1,8 @@
+- note generation window should not necessarily exist??
+- NOTE GENERATION IS A MARKOV CHAIN HOLY SHIT
+
+- narrow down melody creation to single melody
+- make global constants that work, like BPM, etc.
+- figure out how to make choir, organ work, etc
+- figure out how to do things like bass
+- make a complex vcv rack

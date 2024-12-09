@@ -1,0 +1,36 @@
+{
+    "BPM": 100,
+    "CHORD_SEQUENCE": [],
+    "DRUM_BEATS": {
+        "BASS": {
+            "beats": [],
+            "note": 50
+        },
+        "SNARE": {
+            "beats": [],
+            "note": 48
+        },
+        "TOM": {
+            "beats": [],
+            "note": 47
+        },
+        "HI-HAT": {
+            "beats": [],
+            "note": 45
+        }
+    },
+    "VOICES": {
+        "SOLO": {
+            "active": true
+        },
+        "CHOIR": {
+            "active": false
+        },
+        "BRASS": {
+            "active": false
+        },
+        "ORGAN": {
+            "active": false
+        }
+    }
+}
