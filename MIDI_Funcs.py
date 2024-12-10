@@ -11,8 +11,8 @@ def niceMidiExit(_outportSets):
     def gracefulExit(signum, frame):
         print(outportSets)
         for fooOutput in outportSets:
-            for ii in range(128): # Kill all notes
-                msg = mido.Message('note_off', note=ii, velocity=0)
+            for i in range(128): # Kill all notes
+                msg = mido.Message('note_off', note=i, velocity=0)
                 fooOutput.send(msg)
             fooOutput.close()
         print('Stopped!')

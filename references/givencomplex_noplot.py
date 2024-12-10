@@ -8,7 +8,7 @@ from random import random, choice # Random number generator for probabilities
 import numpy as np         # Numerical operations on arrays
 import math as m           # Mathematical functions
 
-import MIDI_Funcs          # Custom module for MIDI utilities (assumed to handle MIDI cleanup)
+import MIDI_Funcs as MIDI_Funcs          # Custom module for MIDI utilities (assumed to handle MIDI cleanup)
 
 # Constants defining the MIDI note range
 NOTE_RANGE_MIN = 24  # Lowest MIDI note to use (C1)

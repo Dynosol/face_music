@@ -22,7 +22,7 @@ BEAT_DURATION = 60 / BPM
 HALFBEAT_DELAY = 0.08
 UPBEAT_DURATION = BEAT_DURATION / 2 - HALFBEAT_DELAY
 
-MIDI_OUT = mido.open_output('IAC Driver Bus 2')
+MIDI_OUT = mido.open_output('IAC Driver Bus 10')
 
 CONFIG_FILE = "config.json"
 

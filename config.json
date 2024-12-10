@@ -1,6 +1,5 @@
 {
-    "BPM": 100,
-    "CHORD_SEQUENCE": [],
+    "BPM": 60,
     "DRUM_BEATS": {
         "BASS": {
             "beats": [],
@@ -21,7 +20,7 @@
     },
     "VOICES": {
         "SOLO": {
-            "active": true
+            "active": false
         },
         "CHOIR": {
             "active": false

@@ -9,7 +9,7 @@ import math as m
 
 import matplotlib.pyplot as plt
 
-import MIDI_Funcs
+import MIDI_Funcs as MIDI_Funcs
 
 arpp_out = mido.open_output('IAC Driver Bus 1')
 bass_out = mido.open_output('IAC Driver Bus 2')

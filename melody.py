@@ -3,14 +3,14 @@ import time                # Import the time module for timing control in the ma
 from random import random, choice  # Import random functions for probabilities and random selection
 import numpy as np         # Import NumPy library for numerical operations on arrays
 import math
-import MIDI_Funcs          # Import a custom module for MIDI utilities (assumed to handle MIDI cleanup)
+import MIDI_Funcs as MIDI_Funcs          # Import a custom module for MIDI utilities (assumed to handle MIDI cleanup)
 
 # Constants defining the MIDI note range
 NOTE_RANGE_MIN = 24  # Lowest MIDI note to use (C1, MIDI note number 24)
 NOTE_RANGE_MAX = 87  # Highest MIDI note to use (D#6, MIDI note number 87)
 
 # Define BPM and timing settings
-BPM = 120           # Set the tempo of the music to 120 beats per minute
+BPM = 240           # Set the tempo of the music to 120 beats per minute
 TICKS_PER_BEAT = 4   # Number of ticks per beat (representing sixteenth notes)
 BEATS_PER_MEASURE = 4  # Number of beats per measure (standard 4/4 time signature)
 
@@ -42,7 +42,7 @@ SCALE_SET = {
 }
 
 # Assign relative priorities to each note in the scales
-SEVEN_NOTE_PRIORITY = [0.99, 0.3, 0.8, 0.7, 0.9, 0.3, 0.4]  # Priorities for seven-note scales
+SEVEN_NOTE_PRIORITY = [0.99, 0.3, 0.8, 0.7, 0.9, 0.3, 0.1]  # Priorities for seven-note scales
 PENT_NOTE_PRIORITY = [0.9, 0.7, 0.8, 0.8, 0.7]              # Priorities for pentatonic scales
 SCALE_ARBITRARY_PRIORITIES = {
     'Major': SEVEN_NOTE_PRIORITY,
@@ -52,6 +52,16 @@ SCALE_ARBITRARY_PRIORITIES = {
     'PentMinor': PENT_NOTE_PRIORITY,
     'justFifthLol': [0.9, 0.8],  # Priorities for perfect fifth intervals
     'No.': [0.1],                # Priority for unison
+}
+
+# Define chord intervals in semitones
+CHORD_INTERVALS = {
+    'Major': [0, 4, 7],  # Root, Major Third, Perfect Fifth
+    'Minor': [0, 3, 7],  # Root, Minor Third, Perfect Fifth
+    'HarmMinor': [0, 3, 7],  # Root, Minor Third, Perfect Fifth
+    'PentMajor': [0, 4, 7],  # Root, Major Third, Perfect Fifth
+    'PentMinor': [0, 3, 7],  # Root, Minor Third, Perfect Fifth
+    'justFifthLol': [0, 7],  # Root, Perfect Fifth
 }
 
 # Define a chord sequence with root notes and corresponding scales
@@ -121,12 +131,14 @@ class MidiHandler:
     """
 
     def __init__(self):
-        # Open MIDI output ports for melody, choir, brass, and organ
-        self.melody_out = mido.open_output('IAC Driver Bus 1')  # Melody output port
-        self.choir_out = mido.open_output('IAC Driver Bus 2')   # Choir output port
-        self.brass_out = mido.open_output('IAC Driver Bus 3')   # Brass output port
-        self.organ_out = mido.open_output('IAC Driver Bus 4')   # Organ output port
-        self.outport_sets = [self.melody_out, self.choir_out, self.brass_out, self.organ_out]  # List of all ports
+        # Open MIDI output ports for melody and choir
+        self.melody_out = mido.open_output('IAC Driver Bus 1')      # Melody output port
+        self.choir_out1 = mido.open_output('IAC Driver Bus 2')      # Choir output port 1
+        self.choir_out2 = mido.open_output('IAC Driver Bus 3')      # Choir output port 2
+        self.choir_out3 = mido.open_output('IAC Driver Bus 4')      # Choir output port 3
+        self.brass_out = mido.open_output('IAC Driver Bus 5')       # Brass output port
+        self.organ_out = mido.open_output('IAC Driver Bus 6')       # Organ output port
+        self.outport_sets = [self.melody_out, self.choir_out1, self.choir_out2, self.choir_out3, self.brass_out, self.organ_out]  # List of all ports
         # Ensure clean exit by turning off any lingering notes
         MIDI_Funcs.niceMidiExit(self.outport_sets)  # Call MIDI cleanup function
 
@@ -200,7 +212,12 @@ class ProceduralMusicGenerator:
 
         # Initialize the first note for each instrument
         self.melody_note = int(self.melody_note_set.notes[0])
-        self.choir_note = int(self.choir_note_set.notes[0])
+        # self.choir_note = int(self.choir_note_set.notes[0])
+        # Initialize previous choir notes with root, third, and fifth of the first chord
+        self.choir_notes = [
+            self.chord_sequence[0][0] + interval
+            for interval in CHORD_INTERVALS[self.chord_sequence[0][1]]
+        ]
         self.brass_note = None  # Start with no note
         self.organ_note = int(self.organ_note_set.notes[0])
 
@@ -216,8 +233,8 @@ class ProceduralMusicGenerator:
         self.melody_note_set = NoteSet(base_note, scale_name, min_note=melody_min_note, max_note=melody_max_note)
 
         # Choir Voice: From base_note up to two octaves above
-        choir_min_note = max(base_note, NOTE_RANGE_MIN)
-        choir_max_note = min(base_note + 24, NOTE_RANGE_MAX)
+        choir_min_note = max(base_note + 12, NOTE_RANGE_MIN)
+        choir_max_note = min(base_note + 36, NOTE_RANGE_MAX)
         self.choir_note_set = NoteSet(base_note, scale_name, min_note=choir_min_note, max_note=choir_max_note)
 
         # Brass Voice: One octave below to one octave above the base_note
@@ -287,7 +304,7 @@ class ProceduralMusicGenerator:
 
         play_note_odds = random()  # Base probability to play a note
 
-        density_factor = 0.6       # Higher values increase the likelihood of playing a note
+        density_factor = 0.5       # Higher values increase the likelihood of playing a note
         neighborhood_factor = 0.7  # Values between 0 and 1; lower values favor closer notes
 
         # Increase odds on chord change or beat
@@ -335,27 +352,84 @@ class ProceduralMusicGenerator:
 
     def process_choir(self):
         """
-        Generates and plays notes for the choir voice.
+        Generates and plays three choir notes (root, third, fifth), each to different MIDI outputs.
         """
-        previous_note = self.choir_note  # Previous choir note
+        previous_notes = self.choir_notes  # Previous choir notes
 
-        # Decide to play new note on chord change or beat
-        if self.notes_since_chord_change == 0 or self.notes_since_chord_change % self.ticks_per_beat == 0:
-            curr_chord = self.organ_note_set.notes  # Current chord notes
-            choir_notes = curr_chord[::2]  # Select every other note
-            selected_note = int(choice(choir_notes) - 12)  # Choose note an octave lower
+        # Play new notes on chord change
+        if self.notes_since_chord_change == 0:
+            base_note, scale_name = self.chord_sequence[self.current_chord_index]
 
-            note_vel = int(self.choir_vel_sum / 4 + 30)  # Calculate velocity
+            # Get chord intervals from the CHORD_INTERVALS dictionary
+            chord_intervals = CHORD_INTERVALS.get(scale_name, CHORD_INTERVALS['Major'])  # Default to Major
 
-            if previous_note is not None:
-                self.midi_handler.send_note_off(self.midi_handler.choir_out, previous_note)  # Turn off previous note
-            self.midi_handler.send_note_on(self.midi_handler.choir_out, selected_note, velocity=note_vel)  # Play new note
+            # Compute the chord notes
+            chord_notes = [base_note + interval for interval in chord_intervals]
 
-            self.choir_history.push(notes=selected_note, velocities=note_vel)  # Update history
-            self.choir_note = selected_note  # Update current note
-            self.choir_vel_sum = (note_vel + self.choir_vel_sum * 3) / 4  # Update velocity sum
+            # Ensure the bass note is within choir_note_set
+            choir_notes_set = set(self.choir_note_set.notes)
+            bass_note = chord_notes[0]
+
+            # Adjust bass_note upwards by octaves until it is in choir_note_set
+            while bass_note not in choir_notes_set:
+                bass_note += 12  # Increase by one octave
+                if bass_note > NOTE_RANGE_MAX:
+                    # If bass_note exceeds the maximum note range, select the closest note from choir_note_set
+                    bass_note = min(self.choir_note_set.notes, key=lambda x: abs(x - bass_note))
+                    break
+
+            # Update the bass note in chord_notes
+            chord_notes[0] = bass_note
+
+            # Map outputs
+            choir_outputs = [self.midi_handler.choir_out1, self.midi_handler.choir_out2, self.midi_handler.choir_out3]
+
+            # Note velocities
+            note_vel = int(self.choir_vel_sum / 4 + 30 * random() + 30)
+
+            # Turn off previous notes
+            for prev_note, port in zip(previous_notes, choir_outputs):
+                if prev_note is not None:
+                    self.midi_handler.send_note_off(port, prev_note)
+
+            # Send note_on messages for new notes
+            for note, port in zip(chord_notes, choir_outputs):
+                self.midi_handler.send_note_on(port, note, velocity=note_vel)
+                print(f"Sending note {note} ({midi_note_to_name(note)}) to port {port.name}")
+
+            # Update previous notes
+            self.choir_notes = chord_notes
+
+            # Update velocity sum
+            self.choir_vel_sum = (note_vel + self.choir_vel_sum * 3) / 4
         else:
-            pass  # Hold the note
+            pass  # Hold the notes
+
+
+    # def process_choir(self):
+    #     """
+    #     Generates and plays notes for the choir voice.
+    #     """
+    #     previous_note = self.choir_note  # Previous choir note
+
+    #     # Decide to play new note on chord change or beat
+    #     if self.notes_since_chord_change == 0 or self.notes_since_chord_change % self.ticks_per_beat == 0:
+    #         curr_chord = self.organ_note_set.notes  # Current chord notes
+    #         print(curr_chord)
+    #         selected_note = int(choice(curr_chord) - 12)  # Choose note an octave lower
+
+    #         note_vel = int(self.choir_vel_sum / 4 + 30)  # Calculate velocity
+
+    #         if previous_note is not None:
+    #             self.midi_handler.send_note_off(self.midi_handler.choir_out, previous_note)  # Turn off previous note
+    #         self.midi_handler.send_note_on(self.midi_handler.choir_out, selected_note, velocity=note_vel)  # Play new note
+
+    #         self.choir_history.push(notes=selected_note, velocities=note_vel)  # Update history
+    #         self.choir_note = selected_note  # Update current note
+    #         self.choir_vel_sum = (note_vel + self.choir_vel_sum * 3) / 4  # Update velocity sum
+    #     else:
+    #         pass  # Hold the note
+
 
     def process_brass(self):
         """
@@ -420,13 +494,14 @@ class ProceduralMusicGenerator:
         current_subdivision = (self.notes_since_chord_change % self.ticks_per_beat) + 1  # Tick within beat
 
         melody_note_name = midi_note_to_name(self.melody_note)  # Melody note name
-        choir_note_name = midi_note_to_name(self.choir_note)    # Choir note name
+        choir_note_names = [midi_note_to_name(note) for note in self.choir_notes]  # Choir note names
+        choir_note_names_str = ', '.join(choir_note_names)  # Combine choir note names
         brass_note_name = midi_note_to_name(self.brass_note)    # Brass note name
         organ_note_name = midi_note_to_name(self.organ_note)    # Organ note name
 
         # Print formatted current state
         print(f"CHORD {chord_root_name} BEAT {current_beat} TICK {current_subdivision} "
-              f"VOICE: {melody_note_name} / CHOIR {choir_note_name} / BRASS {brass_note_name} / ORGAN {organ_note_name}")
+              f"VOICE: {melody_note_name} / CHOIR {choir_note_names_str} / BRASS {brass_note_name} / ORGAN {organ_note_name}")
 
 if __name__ == "__main__":
     # Instantiate the music generator and start the main loop
