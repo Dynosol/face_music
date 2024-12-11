@@ -324,7 +324,7 @@ def process_hands(hand_results, frame):
             wrist_y = wrist.y * h
             pinky_mcp_y = pinky_mcp.y * h
             palm_height_measure = max(abs(pinky_mcp_y - wrist_y), palm_height_measure)
-            pinch_threshold = palm_height_measure / 3 # I know it's magic but it works
+            pinch_threshold = min(palm_height_measure / 4, 100) # I know it's magic but it works
 
             # Calculate midpoint between thumb and index finger for each hand
             index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
@@ -460,6 +460,7 @@ def process_hands(hand_results, frame):
             active_drums.clear()
             active_voices.clear()
             config_modifier.modify_config(drums=active_drums, voices=active_voices)
+        cv2.putText(frame, "HANDS NOT DETECTED", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, RED, 3, cv2.LINE_AA)
 
 def display_results(frame, lengths, emotion_text, velocity_text):
     y_offset = 20
