@@ -1,4 +1,4 @@
-# Face Music - Interactive Facial Expression Music Generator
+# Face Music - Interactive Face and Hand Procedural Music Generation (this readme is GPT generated for now because I'm lazy but I'll update it later)
 
 Generate music dynamically based on your face and hands using computer vision and real-time audio synthesis.
 
