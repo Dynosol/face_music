@@ -1,6 +1,6 @@
 # Face Music - Interactive Facial Expression Music Generator
 
-Generate music dynamically based on your facial expressions using computer vision and real-time audio synthesis.
+Generate music dynamically based on your face and hands using computer vision and real-time audio synthesis.
 
 ## Overview
 
