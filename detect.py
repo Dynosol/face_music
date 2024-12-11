@@ -1,3 +1,4 @@
+from turtle import left, right
 import cv2
 import mediapipe as mp
 import math
@@ -7,90 +8,139 @@ import config_modifier
 from main import MIN_BPM, MAX_BPM
 import threading
 
-def initialize():
-    global mp_face_mesh, mp_hands, face_mesh, hands
-    global GREEN, RED, BLUE, YELLOW, WHITE
-    global NOSE_TIP_INDEX, MOUTH_TOP_INDEX, MOUTH_BOTTOM_INDEX, MOUTH_LEFT_CORNER_INDEX, MOUTH_RIGHT_CORNER_INDEX
-    global LEFT_EYE_TOP_INDEX, LEFT_EYE_BOTTOM_INDEX, RIGHT_EYE_TOP_INDEX, RIGHT_EYE_BOTTOM_INDEX
-    global FOREHEAD_TOP_INDEX, CHIN_BOTTOM_INDEX, LEFT_CHEEK_INDEX, RIGHT_CHEEK_INDEX
-    global CLAP_THRESHOLD, CLAPTEXT_FADE, original_hand_distance
-    global max_mouth_openness, max_mouth_wideness, min_mouth_wideness, fgbg
-    global video_capture, finger_names, finger_labels, finger_states, finger_colors, active_drums, previous_active_drums
-    global active_voices, previous_active_voices
-    global DRUM_BEAT_MAPPING, prev_hand_distance, prev_time, start_time, clap_start_time
-    global frame_lock
+N = {}# shorthand for notes
 
-    # Initialize mediapipe Face Mesh for detecting facial landmarks
-    mp_face_mesh = mp.solutions.face_mesh
-    mp_hands = mp.solutions.hands
-    face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
-    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2)
+# Generate a dictionary mapping note names to MIDI note numbers
+note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-    GREEN = (0, 255, 0)
-    RED = (0, 0, 255)
-    BLUE = (255, 0, 0)
-    YELLOW = (0, 255, 255)
-    WHITE = (255, 255, 255)
+for midi_number in range(128):
+    note_in_octave = midi_number % 12
+    octave = (midi_number // 12) - 1
+    note_name = note_names[note_in_octave] + str(octave)
+    N[note_name] = midi_number
 
-    # Landmark indices for facial features
-    NOSE_TIP_INDEX = 1
-    MOUTH_TOP_INDEX = 13  # Upper lip
-    MOUTH_BOTTOM_INDEX = 14  # Lower lip
-    MOUTH_LEFT_CORNER_INDEX = 61
-    MOUTH_RIGHT_CORNER_INDEX = 291
-    LEFT_EYE_TOP_INDEX = 159
-    LEFT_EYE_BOTTOM_INDEX = 145
-    RIGHT_EYE_TOP_INDEX = 386
-    RIGHT_EYE_BOTTOM_INDEX = 374
-    FOREHEAD_TOP_INDEX = 10
-    CHIN_BOTTOM_INDEX = 152
-    LEFT_CHEEK_INDEX = 234
-    RIGHT_CHEEK_INDEX = 454
+CHORD_SEQUENCE_I_V_vi_IV = [
+    [N["C2"], 'Major'],
+    [N["G2"], 'Major'],
+    [N["A2"], 'Minor'],
+    [N["F2"], 'Major'],
+], "CHORD_SEQUENCE_(C)_I_V_vi_IV"
 
-    CLAP_THRESHOLD = -5
-    CLAPTEXT_FADE = 0.5
+CHORD_SEQUENCE_vi_IV_I_V = [
+    [N["A2"], 'Minor'],
+    [N["F2"], 'Major'],
+    [N["C2"], 'Major'],
+    [N["G2"], 'Major'],
+], "CHORD_SEQUENCE_(C)_vi_IV_I_V"
 
-    original_hand_distance = None
+CHORD_SEQUENCE_I_vi_IV_V = [
+    [N["C2"], 'Major'],
+    [N["A2"], 'Minor'],
+    [N["F2"], 'Major'],
+    [N["G2"], 'Major'],
+], "CHORD_SEQUENCE_(C)_I_vi_IV_V"
 
-    max_mouth_openness = 0
-    max_mouth_wideness = 0
-    min_mouth_wideness = 0.5
+# both closed
+CHORD_SEQUENCE_D_I_V_vi_IV = [
+    [N["D2"], 'Major'],
+    [N["A2"], 'Major'],
+    [N["B2"], 'Minor'],
+    [N["G2"], 'Major'],
+], "CHORD_SEQUENCE_(D)_I_V_vi_IV"
 
-    fgbg = cv2.createBackgroundSubtractorMOG2()
+CHORD_SEQUENCE_IV_V__vi_I = [
+    [N["F2"], 'Major'],
+    [N["G2"], 'Major'],
+    [N["A2"], 'Minor'],
+    [N["C2"], 'Major'],
+], "CHORD_SEQUENCE_(C)_IV_V__vi_I"
 
-    # Initialize the webcam
-    video_capture = cv2.VideoCapture(0)
+CHORD_SEQUENCE_I_ii_vi_V = [
+    [N["C2"], 'Major'],
+    [N["D2"], 'Minor'],
+    [N["A2"], 'Minor'],
+    [N["G2"], 'Major'],
+], "CHORD_SEQUENCE_(C)_I_ii_vi_V"
 
-    finger_names = {
-        mp_hands.HandLandmark.INDEX_FINGER_TIP: "Index Finger",
-        mp_hands.HandLandmark.MIDDLE_FINGER_TIP: "Middle Finger",
-        mp_hands.HandLandmark.RING_FINGER_TIP: "Ring Finger",
-        mp_hands.HandLandmark.PINKY_TIP: "Pinky Finger"
-    }
+# Initialize mediapipe Face Mesh for detecting facial landmarks
+mp_face_mesh = mp.solutions.face_mesh
+mp_hands = mp.solutions.hands
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
+hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2)
 
-    finger_labels = {
-        'Left': ["SNARE", "BASS", "HI-HAT", "TOM"],
-        'Right': ["SOLO", "CHOIR", "BRASS", "ORGAN"]
-    }
+GREEN = (0, 255, 0)
+RED = (0, 0, 255)
+BLUE = (255, 0, 0)
+YELLOW = (0, 255, 255)
+WHITE = (255, 255, 255)
 
-    finger_states = {label: None for labels in finger_labels.values() for label in labels}
-    finger_colors = {label: WHITE for labels in finger_labels.values() for label in labels}
+# Landmark indices for facial features
+NOSE_TIP_INDEX = 1
+MOUTH_TOP_INDEX = 13  # Upper lip
+MOUTH_BOTTOM_INDEX = 14  # Lower lip
+MOUTH_LEFT_CORNER_INDEX = 61
+MOUTH_RIGHT_CORNER_INDEX = 291
+LEFT_EYE_TOP_INDEX = 159
+LEFT_EYE_BOTTOM_INDEX = 145
+RIGHT_EYE_TOP_INDEX = 386
+RIGHT_EYE_BOTTOM_INDEX = 374
+FOREHEAD_TOP_INDEX = 10
+CHIN_BOTTOM_INDEX = 152
+LEFT_CHEEK_INDEX = 234
+RIGHT_CHEEK_INDEX = 454
 
-    # For changing active drums and voices
-    active_drums = set()
-    previous_active_drums = set()
-    active_voices = set()
-    previous_active_voices = set()
+CLAP_THRESHOLD = -4
+CLAPTEXT_FADE = 0.5
 
-    prev_hand_distance = None
-    prev_time = time.time()  # for clapping!
-    start_time = time.time()
-    clap_start_time = None
+clap_distance = None
+palm_height_measure = 0
 
-    frame_lock = threading.Lock()
+max_mouth_openness = 0
+max_mouth_wideness = 0
+min_mouth_wideness = 0.5
+
+fgbg = cv2.createBackgroundSubtractorMOG2()
+
+
+# EYES CLOSED FOR CHORD SQUENCE
+last_chord_state = None
+state_start_time = None
+left_eye_text = "Closed?"
+right_eye_text = "Closed?"
+
+# Initialize the webcam
+video_capture = cv2.VideoCapture(0)
+
+finger_names = {
+    mp_hands.HandLandmark.INDEX_FINGER_TIP: "Index Finger",
+    mp_hands.HandLandmark.MIDDLE_FINGER_TIP: "Middle Finger",
+    mp_hands.HandLandmark.RING_FINGER_TIP: "Ring Finger",
+    mp_hands.HandLandmark.PINKY_TIP: "Pinky Finger"
+}
+
+finger_labels = {
+    'Left': ["SNARE", "BASS", "HI-HAT", "TOM"],
+    'Right': ["SOLO", "CHOIR", "BRASS", "ORGAN"]
+}
+
+finger_states = {label: None for labels in finger_labels.values() for label in labels}
+finger_colors = {label: WHITE for labels in finger_labels.values() for label in labels}
+
+# For changing active drums and voices
+active_drums = set()
+previous_active_drums = set()
+active_voices = set()
+previous_active_voices = set()
+
+prev_hand_distance = None
+prev_time = time.time()  # for clapping!
+start_time = time.time()
+clap_start_time = None
+
+frame_lock = threading.Lock()
 
 def process_face(face_results, frame):
-    global lengths, emotion_text, start_time, max_mouth_openness, max_mouth_wideness, min_mouth_wideness, frame_lock
+    global lengths, emotion_text, start_time, max_mouth_openness, max_mouth_wideness, min_mouth_wideness, frame_lock, clap_distance, last_chord_state, state_start_time, left_eye_text, right_eye_text
 
     current_time = time.time()
     if current_time - start_time >= 5:
@@ -122,7 +172,6 @@ def process_face(face_results, frame):
             lengths.append(f"Head Width: {head_width:.2f}")
             max_mouth_openness = max(head_height / 4, mouth_wideness)
             max_mouth_wideness = max(head_width / 2, mouth_wideness)
-            max_wideness = head_width / 2
             mouth_openness_normalized = min(mouth_openness / max_mouth_openness, 1.0)
 
             mouth_wideness_normalized = min(mouth_wideness / max_mouth_wideness, 1.0)
@@ -134,6 +183,8 @@ def process_face(face_results, frame):
             scaled_mouth_wideness = max(0, min(scaled_mouth_wideness, 1))  # Clamp between 0 and 1
 
             bpm = int(MIN_BPM + (scaled_mouth_wideness * (MAX_BPM - MIN_BPM)))
+
+            clap_distance = head_width * 3
 
             # ==================================================================================================================================
             config_modifier.modify_config(bpm=bpm)
@@ -157,10 +208,51 @@ def process_face(face_results, frame):
             # Calculate eye openness
             left_eye_openness = abs(left_eye_bottom_y - left_eye_top_y)
             right_eye_openness = abs(right_eye_bottom_y - right_eye_top_y)
-            eye_max_open = head_height / 80
+            eye_max_open = head_height / 70 # some weird phenotypical stuff... but it works
             lengths.append(f"Eye Max Openness: {eye_max_open:.2f}")
-            left_eye_text = "Closed" if left_eye_openness < eye_max_open else "Open"
-            right_eye_text = "Closed" if right_eye_openness < eye_max_open else "Open"
+
+            left_closed = left_eye_openness < eye_max_open
+            right_closed = right_eye_openness < eye_max_open
+
+            # Update eye text instantly
+            if left_closed and right_closed:
+                left_eye_text = "Closed"
+                right_eye_text = f"Closed, {CHORD_SEQUENCE_D_I_V_vi_IV[1]}"
+                current_state = "both_closed"
+            elif not left_closed and not right_closed:
+                left_eye_text = "Open"
+                right_eye_text = f"Open, {CHORD_SEQUENCE_I_ii_vi_V[1]}" 
+                current_state = "both_open"
+            elif not left_closed and right_closed:
+                left_eye_text = "Open"
+                right_eye_text = f"Closed, {CHORD_SEQUENCE_vi_IV_I_V[1]}"
+                current_state = "left_open_right_closed"
+            elif left_closed and not right_closed:
+                left_eye_text = "Closed"
+                right_eye_text = f"Open, {CHORD_SEQUENCE_IV_V__vi_I[1]}"
+                current_state = "left_closed_right_open"
+            else:
+                current_state = None
+
+            # Handle chord modification
+            if current_state != last_chord_state:
+                # State changed, reset timer
+                last_chord_state = current_state
+                state_start_time = time.time()
+            else:
+                # State is consistent
+                elapsed_time = time.time() - state_start_time
+                if elapsed_time >= 2:
+                    # State has been consistent for 2 seconds, modify chord
+                    if current_state == "both_closed":
+                        config_modifier.modify_config(chord_sequence=CHORD_SEQUENCE_D_I_V_vi_IV[0])
+                    elif current_state == "both_open":
+                        config_modifier.modify_config(chord_sequence=CHORD_SEQUENCE_I_ii_vi_V[0])
+                    elif current_state == "left_open_right_closed":
+                        config_modifier.modify_config(chord_sequence=CHORD_SEQUENCE_vi_IV_I_V[0])
+                    elif current_state == "left_closed_right_open":
+                        config_modifier.modify_config(chord_sequence=CHORD_SEQUENCE_IV_V__vi_I[0])
+
             lengths.append(f"Left Eye Openness: {left_eye_openness:.2f}")
             lengths.append(f"Right Eye Openness: {right_eye_openness:.2f}")
 
@@ -181,7 +273,7 @@ def process_face(face_results, frame):
                 cv2.line(frame, (int(mouth_top.x * w), int(mouth_top.y * h)), (int(mouth_bottom.x * w), int(mouth_bottom.y * h)), RED, 2)
                 cv2.line(frame, (mouth_left_x, mouth_left_y), (mouth_right_x, mouth_right_y), BLUE, 2)
 
-                cv2.putText(frame, f"Openness (Volume): {round(mouth_openness_normalized * 100, 0)}%", (int(mouth_top.x * w), int(mouth_top.y * h) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
+                cv2.putText(frame, f"Openness: {round(mouth_openness_normalized * 100, 0)}%", (int(mouth_top.x * w), int(mouth_top.y * h) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
                 cv2.putText(frame, f"Wideness (BPM): {round(scaled_mouth_wideness * 100, 0)}%, {bpm} BPM", (mouth_left_x, mouth_left_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
                 cv2.putText(frame, f"{left_eye_text}", (left_eye_top_x, left_eye_top_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
                 cv2.putText(frame, f"{right_eye_text}", (right_eye_top_x, right_eye_top_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
@@ -206,7 +298,13 @@ def process_hands(hand_results, frame):
     global active_drums, previous_active_drums
     global active_voices, previous_active_voices
     global finger_states, finger_colors, prev_hand_distance, prev_time, clap_start_time, original_hand_distance
+    global palm_height_measure
     global frame_lock
+
+    pinch_time = time.time()
+    if pinch_time - start_time >= 10:
+        # Reset values
+        palm_height_measure = 0
 
     if hand_results.multi_hand_landmarks:
         hand_midpoints = []
@@ -225,8 +323,8 @@ def process_hands(hand_results, frame):
             # Calculate palm height
             wrist_y = wrist.y * h
             pinky_mcp_y = pinky_mcp.y * h
-            palm_height = abs(pinky_mcp_y - wrist_y)
-            pinch_threshold = palm_height / 2
+            palm_height_measure = max(abs(pinky_mcp_y - wrist_y), palm_height_measure)
+            pinch_threshold = palm_height_measure / 3 # I know it's magic but it works
 
             # Calculate midpoint between thumb and index finger for each hand
             index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
@@ -268,7 +366,6 @@ def process_hands(hand_results, frame):
                 # Compare with the previous state
                 if finger_states[finger_label] != current_state:
                     finger_states[finger_label] = current_state
-                    print(f"State changed for {finger_label}: {current_state}")
 
                     # Update active_drums or active_voices based on the hand label
                     if label == 'Left':
@@ -311,10 +408,8 @@ def process_hands(hand_results, frame):
             current_time = time.time()
             if prev_hand_distance is not None:
                 time_diff = current_time - prev_time
-                if original_hand_distance is None:
-                    original_hand_distance = hand_distance
-                distance_ratio = hand_distance / original_hand_distance
-                velocity = (distance_ratio - (prev_hand_distance / original_hand_distance)) / time_diff
+                distance_ratio = hand_distance / clap_distance
+                velocity = (distance_ratio - (prev_hand_distance / clap_distance)) / time_diff
                 velocity_text = f"Velocity of Hand Distance: {velocity:.2f}x/sec"
 
                 # Detect clap based on velocity ratio
@@ -359,6 +454,13 @@ def process_hands(hand_results, frame):
                 else:
                     clap_start_time = None  # Reset clap_start_time after 0.5 seconds
 
+    else:
+        # Reset the active drums and voices if no hands are detected
+        if active_drums or active_voices:
+            active_drums.clear()
+            active_voices.clear()
+            config_modifier.modify_config(drums=active_drums, voices=active_voices)
+
 def display_results(frame, lengths, emotion_text, velocity_text):
     y_offset = 20
     for length in lengths:
@@ -379,8 +481,6 @@ def display_results(frame, lengths, emotion_text, velocity_text):
     cv2.imshow('Video', frame)
 
 def main():
-    initialize()
-
     global lengths, emotion_text, velocity_text, clap_detected, finger_length
     global prev_hand_distance, prev_time, clap_start_time, original_hand_distance, start_time
 

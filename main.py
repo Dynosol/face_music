@@ -1,13 +1,16 @@
 import subprocess
 import sys
+from config_modifier import modify_config
 
 MAX_BPM = 240
 MIN_BPM = 60
 
 def main():
+    modify_config(reset=True)
+
     try:
         # Launch basic_drums_vcv.py
-        music_process = subprocess.Popen([sys.executable, "music_main.py"])
+        music_process = subprocess.Popen([sys.executable, "drums_and_melody.py"])
         print("Running music_main.py...")
 
         # Launch detect.py

@@ -1,18 +1,31 @@
+from hmac import new
 import mido                # Import the mido library for MIDI input/output operations
 import time                # Import the time module for timing control in the main loop
-from random import random, choice  # Import random functions for probabilities and random selection
+from random import random, choices  # Import random functions for probabilities and random selection
 import numpy as np         # Import NumPy library for numerical operations on arrays
 import math
 import MIDI_Funcs as MIDI_Funcs          # Import a custom module for MIDI utilities (assumed to handle MIDI cleanup)
+import json
+
+
+DRUMS_MIDI = mido.open_output('IAC Driver Bus 10')      # Drums output port
+MELODY_MIDI = mido.open_output('IAC Driver Bus 1')      # Melody output port
+CHOIR_MIDI1 = mido.open_output('IAC Driver Bus 2')      # Choir output port 1
+CHOIR_MIDI2 = mido.open_output('IAC Driver Bus 3')      # Choir output port 2
+CHOIR_MIDI3 = mido.open_output('IAC Driver Bus 4')      # Choir output port 3
+BRASS_MIDI = mido.open_output('IAC Driver Bus 5')       # Brass output port
+ORGAN_MIDI = mido.open_output('IAC Driver Bus 6')       # Organ output port
+
 
 # Constants defining the MIDI note range
 NOTE_RANGE_MIN = 24  # Lowest MIDI note to use (C1, MIDI note number 24)
 NOTE_RANGE_MAX = 87  # Highest MIDI note to use (D#6, MIDI note number 87)
 
 # Define BPM and timing settings
-BPM = 240           # Set the tempo of the music to 120 beats per minute
+BPM = 60
 TICKS_PER_BEAT = 4   # Number of ticks per beat (representing sixteenth notes)
 BEATS_PER_MEASURE = 4  # Number of beats per measure (standard 4/4 time signature)
+CONFIG_FILE = "config.json"
 
 # Calculate derived timing constants
 SECONDS_PER_BEAT = 60.0 / BPM  # Duration of one beat in seconds
@@ -65,11 +78,31 @@ CHORD_INTERVALS = {
 }
 
 # Define a chord sequence with root notes and corresponding scales
-CHORD_SEQUENCE = [
-    [N["C2"], 'Major'],  # D minor pentatonic (MIDI note 50 is D3)
-    [N["D2"], 'Minor'],      # G major (MIDI note 55 is G3)
-    [N["G2"], 'Major'],      # C major (MIDI note 60 is C4, Middle C)
+CHORD_SEQUENCE_I_ii_iv_V = [
+    [N["A2"], 'Minor'],
+    [N["D2"], 'Minor'],
+    [N["G2"], 'Major'],
+    [N["C2"], 'Major'],
 ]
+
+# Constants
+SNARE_NOTE = N["C3"]
+BASS_NOTE = N["D3"]
+HI_HAT_NOTE = N["A2"]
+TOM_NOTE = N["G2"]
+VELOCITY = 100
+
+# Default Drum Configuration ==================================================================================================================================
+DRUM_BEATS = {
+    "BASS": {"beats": {1, 3}, "note": BASS_NOTE},  # Hits on beats 1 and 3
+    "SNARE": {"beats": {2, 4}, "note": SNARE_NOTE},  # Hits on beats 2 and 4
+    "TOM": {"beats": {}, "note": TOM_NOTE},  # Hits on beat 4
+    "HI-HAT": {"beats": {1.5,2.5,3.5,4.5}, "note": HI_HAT_NOTE},  # Includes upbeats as regular beats
+}
+BEAT_DURATION = 60 / BPM
+HALFBEAT_DELAY = 0.08
+UPBEAT_DURATION = BEAT_DURATION / 2 - HALFBEAT_DELAY
+# =============================================================================================================================================================
 
 # Function to convert MIDI note numbers to note names
 def midi_note_to_name(midi_note):
@@ -110,14 +143,14 @@ class NoteSet:
         out_priority = []  # Initialize list to store corresponding note priorities
         # Generate notes across octaves until reaching the maximum note range
         while base_note < self.max_note:
-            for ii in range(len(interval_set)):
-                note = base_note + interval_set[ii]  # Calculate the MIDI note number
+            for i in range(len(interval_set)):
+                note = base_note + interval_set[i]  # Calculate the MIDI note number
                 if note < self.min_note:
                     continue  # Skip notes below the minimum note range
                 if note > self.max_note:
                     continue     # Skip notes above the maximum note range
                 out_notes.append(int(note))  # Add the note to the list
-                out_priority.append(arbitrary_interval_priority[ii % len(arbitrary_interval_priority)])  # Add the corresponding priority
+                out_priority.append(arbitrary_interval_priority[i % len(arbitrary_interval_priority)])  # Add the corresponding priority
             base_note += 12  # Move to the next octave
 
         # Store the generated notes and priorities
@@ -132,13 +165,17 @@ class MidiHandler:
 
     def __init__(self):
         # Open MIDI output ports for melody and choir
-        self.melody_out = mido.open_output('IAC Driver Bus 1')      # Melody output port
-        self.choir_out1 = mido.open_output('IAC Driver Bus 2')      # Choir output port 1
-        self.choir_out2 = mido.open_output('IAC Driver Bus 3')      # Choir output port 2
-        self.choir_out3 = mido.open_output('IAC Driver Bus 4')      # Choir output port 3
-        self.brass_out = mido.open_output('IAC Driver Bus 5')       # Brass output port
-        self.organ_out = mido.open_output('IAC Driver Bus 6')       # Organ output port
-        self.outport_sets = [self.melody_out, self.choir_out1, self.choir_out2, self.choir_out3, self.brass_out, self.organ_out]  # List of all ports
+        self.drums_out = DRUMS_MIDI
+        self.melody_out = MELODY_MIDI      # Melody output port
+        self.choir_out1 = CHOIR_MIDI1      # Choir output port 1
+        self.choir_out2 = CHOIR_MIDI2      # Choir output port 2
+        self.choir_out3 = CHOIR_MIDI3      # Choir output port 3
+        self.brass_out = BRASS_MIDI       # Brass output port
+        self.organ_out = ORGAN_MIDI       # Organ output port
+
+        self.choir_outputs = [self.choir_out1, self.choir_out2, self.choir_out3]  # Add this line
+        self.outport_sets = [self.melody_out, self.brass_out, self.organ_out] + self.choir_outputs
+
         # Ensure clean exit by turning off any lingering notes
         MIDI_Funcs.niceMidiExit(self.outport_sets)  # Call MIDI cleanup function
 
@@ -155,6 +192,13 @@ class MidiHandler:
         for outport in self.outport_sets:
             outport.send(mido.Message('note_off', note=0, velocity=0))  # Turn off all notes
             outport.close()  # Close the port
+
+    def send_drum_notes(self, midi_out, drum_notes, velocity, duration=0.05):
+        for drum_note in drum_notes:
+            midi_out.send(mido.Message('note_on', note=drum_note, velocity=velocity))
+        time.sleep(duration)
+        for drum_note in drum_notes:
+            midi_out.send(mido.Message('note_off', note=drum_note))
 
 class HistoryBuffer:
     """
@@ -180,9 +224,9 @@ class ProceduralMusicGenerator:
     Main class responsible for generating procedural music.
     """
 
-    def __init__(self):
+    def __init__(self, drum_beats=DRUM_BEATS):
         self.midi_handler = MidiHandler()  # Initialize MIDI handler
-        self.chord_sequence = CHORD_SEQUENCE  # Use predefined chord sequence
+        self.chord_sequence = CHORD_SEQUENCE_I_ii_iv_V  # Use predefined chord sequence
         self.current_chord_index = 0  # Start with the first chord
         self.notes_since_chord_change = 0  # Ticks since last chord change
         self.current_tick = -1  # Initialize tick counter
@@ -207,6 +251,13 @@ class ProceduralMusicGenerator:
         self.brass_vel_sum = 100   # Brass velocity sum
         self.organ_vel_sum = 100   # Organ velocity sum
 
+        self.solo_active = False
+        self.choir_active = False
+        self.brass_active = False
+        self.organ_active = False
+
+        self.brass_active_prev = False # for arpeggiation
+
         # Initialize the first chord and note sets for each voice
         self.initialize_note_sets()
 
@@ -221,6 +272,65 @@ class ProceduralMusicGenerator:
         self.brass_note = None  # Start with no note
         self.organ_note = int(self.organ_note_set.notes[0])
 
+        self.drum_beats = drum_beats
+
+        self.load_config()  # Load BPM and drum configuration from file
+
+    def load_config(self):
+        """Load BPM, drum configuration, instrument active states, and chord progression from a JSON file."""
+        global BPM, SECONDS_PER_BEAT, TIME_DELAY, MEASURE_DURATION, BEAT_DURATION, UPBEAT_DURATION
+        try:
+            with open(CONFIG_FILE, "r") as file:
+                config = json.load(file)
+                # Update BPM and calculate beat durations
+                BPM = config.get("BPM", BPM)
+                SECONDS_PER_BEAT = 60.0 / BPM
+                self.time_delay = SECONDS_PER_BEAT / self.ticks_per_beat
+                BEAT_DURATION = 60 / BPM
+                HALFBEAT_DELAY = 0.08
+                UPBEAT_DURATION = BEAT_DURATION / 2 - HALFBEAT_DELAY
+                MEASURE_DURATION = self.beats_per_measure * self.ticks_per_beat
+                self.measure_duration = MEASURE_DURATION
+                self.chord_sequence_duration = self.measure_duration
+
+                # Update drum beats
+                self.drum_beats = config.get("DRUM_BEATS", self.drum_beats)
+                for _, data in self.drum_beats.items():
+                    if "beats" in data and isinstance(data["beats"], list):
+                        data["beats"] = set(data["beats"])
+                    if isinstance(data["note"], str):
+                        data["note"] = N.get(data["note"], BASS_NOTE)  # Default to BASS_NOTE if not found
+
+                # Load instrument active states
+                voices_config = config.get("VOICES", {})
+                self.solo_active = voices_config.get("SOLO", {}).get("active", True)
+                self.choir_active = voices_config.get("CHOIR", {}).get("active", True)
+                self.brass_active = voices_config.get("BRASS", {}).get("active", True)
+                self.organ_active = voices_config.get("ORGAN", {}).get("active", True)
+
+                # Update chord progression
+                chord_sequence = config.get("CHORD_SEQUENCE", [])
+                if len(chord_sequence) > 0:
+                    new_chord_sequence = []  # Initialize chord progression list
+
+                    for chord in chord_sequence:
+                        bass_note = chord.get("bass")
+                        chord_type = chord.get("type")
+
+                        # Append the chord as a tuple or appropriate data structure
+                        new_chord_sequence.append([
+                            bass_note, chord_type
+                        ])
+
+                    self.chord_sequence = new_chord_sequence  # Update chord sequence
+
+        except FileNotFoundError:
+            print("Config file not found, using default settings.")
+        except json.JSONDecodeError as e:
+            print(f"Error decoding config file: {e}")
+
+
+
     def initialize_note_sets(self):
         """Initializes separate NoteSets for each voice with appropriate ranges based on current chord."""
         base_note, scale_name = self.chord_sequence[self.current_chord_index]
@@ -229,7 +339,7 @@ class ProceduralMusicGenerator:
         # Ensure they are within the allowed MIDI note range
         # Melody Voice: One to three octaves above the base_note
         melody_min_note = max(base_note + 12, NOTE_RANGE_MIN)
-        melody_max_note = min(base_note + 36, NOTE_RANGE_MAX)
+        melody_max_note = min(base_note + 24, NOTE_RANGE_MAX)
         self.melody_note_set = NoteSet(base_note, scale_name, min_note=melody_min_note, max_note=melody_max_note)
 
         # Choir Voice: From base_note up to two octaves above
@@ -238,8 +348,8 @@ class ProceduralMusicGenerator:
         self.choir_note_set = NoteSet(base_note, scale_name, min_note=choir_min_note, max_note=choir_max_note)
 
         # Brass Voice: One octave below to one octave above the base_note
-        brass_min_note = max(base_note - 12, NOTE_RANGE_MIN)
-        brass_max_note = min(base_note + 12, NOTE_RANGE_MAX)
+        brass_min_note = max(base_note + 12, NOTE_RANGE_MIN)
+        brass_max_note = min(base_note + 36, NOTE_RANGE_MAX)
         self.brass_note_set = NoteSet(base_note, scale_name, min_note=brass_min_note, max_note=brass_max_note)
 
         # Organ Voice: Two octaves below up to the base_note
@@ -256,12 +366,17 @@ class ProceduralMusicGenerator:
                 start_time = time.time()  # Start time of the tick
                 self.current_tick += 1    # Increment tick counter
 
+                self.load_config()
+
                 # Handle chord changes
                 self.handle_chord_changes()
 
                 # Process each instrument
                 self.process_melody()
                 self.process_choir()
+
+                self.process_drums()
+
                 self.process_brass()
                 self.process_organ()
 
@@ -299,12 +414,18 @@ class ProceduralMusicGenerator:
         """
         Generates and plays notes for the melody (solo) voice.
         """
+        if not self.solo_active:
+            # If a note is currently playing, send note_off to stop it
+            if self.melody_note is not None:
+                self.midi_handler.send_note_off(self.midi_handler.melody_out, self.melody_note)
+            return  # Skip further processing since the solo is inactive
+
         previous_note = self.melody_note  # Previous note for reference
         notes_since_change = self.notes_since_chord_change  # Ticks since last chord change
 
         play_note_odds = random()  # Base probability to play a note
 
-        density_factor = 0.5       # Higher values increase the likelihood of playing a note
+        density_factor = 0.8       # Higher values decrease the likelihood of playing a note
         neighborhood_factor = 0.7  # Values between 0 and 1; lower values favor closer notes
 
         # Increase odds on chord change or beat
@@ -312,6 +433,8 @@ class ProceduralMusicGenerator:
             play_note_odds *= 5  # Higher chance on chord change
         elif notes_since_change % self.ticks_per_beat == 0:
             play_note_odds *= 2  # Higher chance on beat
+        if (self.notes_since_chord_change % self.ticks_per_beat) == 0 or (self.notes_since_chord_change % self.ticks_per_beat) == 2:
+            play_note_odds *= 5
 
         do_play_note = play_note_odds > density_factor  # Decide whether to play a note
 
@@ -354,39 +477,49 @@ class ProceduralMusicGenerator:
         """
         Generates and plays three choir notes (root, third, fifth), each to different MIDI outputs.
         """
+        if not self.choir_active:
+            # If notes are currently playing, send note_off messages to stop them
+            for port in self.midi_handler.choir_outputs:
+                for note in range(NOTE_RANGE_MIN, NOTE_RANGE_MAX + 1):
+                    self.midi_handler.send_note_off(port, note)
+            return  # Skip further processing since the choir is inactive
+
         previous_notes = self.choir_notes  # Previous choir notes
+        base_note, scale_name = self.chord_sequence[self.current_chord_index]
+
+        # Get chord intervals from the CHORD_INTERVALS dictionary
+        chord_intervals = CHORD_INTERVALS.get(scale_name, CHORD_INTERVALS['Major'])  # Default to Major
+
+        # Compute the chord notes
+        chord_notes = [base_note + interval for interval in chord_intervals]
+
+        # Ensure the bass note is within choir_note_set
+        choir_notes_set = set(self.choir_note_set.notes)
+        bass_note = chord_notes[0]
+
+        # Adjust bass_note upwards by octaves until it is in choir_note_set
+        while bass_note not in choir_notes_set:
+            bass_note += 12  # Increase by one octave
+            if bass_note > NOTE_RANGE_MAX:
+                # If bass_note exceeds the maximum note range, select the closest note from choir_note_set
+                bass_note = min(self.choir_note_set.notes, key=lambda x: abs(x - bass_note))
+                break
+
+        # Update the bass note in chord_notes
+        chord_notes[0] = bass_note
+
+        # Map outputs
+        choir_outputs = [self.midi_handler.choir_out1, self.midi_handler.choir_out2, self.midi_handler.choir_out3]
+
+        # Note velocities
+        note_vel = int(self.choir_vel_sum / 4 + 30 * random() + 30)
+
+        # Send note_on messages for new notes
+        for note, port in zip(chord_notes, choir_outputs):
+            self.midi_handler.send_note_on(port, note, velocity=note_vel)
 
         # Play new notes on chord change
         if self.notes_since_chord_change == 0:
-            base_note, scale_name = self.chord_sequence[self.current_chord_index]
-
-            # Get chord intervals from the CHORD_INTERVALS dictionary
-            chord_intervals = CHORD_INTERVALS.get(scale_name, CHORD_INTERVALS['Major'])  # Default to Major
-
-            # Compute the chord notes
-            chord_notes = [base_note + interval for interval in chord_intervals]
-
-            # Ensure the bass note is within choir_note_set
-            choir_notes_set = set(self.choir_note_set.notes)
-            bass_note = chord_notes[0]
-
-            # Adjust bass_note upwards by octaves until it is in choir_note_set
-            while bass_note not in choir_notes_set:
-                bass_note += 12  # Increase by one octave
-                if bass_note > NOTE_RANGE_MAX:
-                    # If bass_note exceeds the maximum note range, select the closest note from choir_note_set
-                    bass_note = min(self.choir_note_set.notes, key=lambda x: abs(x - bass_note))
-                    break
-
-            # Update the bass note in chord_notes
-            chord_notes[0] = bass_note
-
-            # Map outputs
-            choir_outputs = [self.midi_handler.choir_out1, self.midi_handler.choir_out2, self.midi_handler.choir_out3]
-
-            # Note velocities
-            note_vel = int(self.choir_vel_sum / 4 + 30 * random() + 30)
-
             # Turn off previous notes
             for prev_note, port in zip(previous_notes, choir_outputs):
                 if prev_note is not None:
@@ -395,7 +528,6 @@ class ProceduralMusicGenerator:
             # Send note_on messages for new notes
             for note, port in zip(chord_notes, choir_outputs):
                 self.midi_handler.send_note_on(port, note, velocity=note_vel)
-                print(f"Sending note {note} ({midi_note_to_name(note)}) to port {port.name}")
 
             # Update previous notes
             self.choir_notes = chord_notes
@@ -433,44 +565,94 @@ class ProceduralMusicGenerator:
 
     def process_brass(self):
         """
-        Generates and plays notes for the brass voice.
+        Generates and plays notes for the brass voice with arpeggiation.
         """
+        if not self.brass_active:
+            # If notes are currently playing, send note_off messages to stop them
+            for note in range(NOTE_RANGE_MIN, NOTE_RANGE_MAX + 1):
+                self.midi_handler.send_note_off(self.midi_handler.brass_out, note)
+            self.brass_active_prev = False
+            return  # Skip further processing since the brass is inactive
+
+        if not self.brass_active_prev:
+            # Brass just became active
+            self.brass_active_prev = True
+            self.arpeggio_index = 0  # Initialize arpeggio index
+            self.arpeggio_direction = 1  # Start arpeggio going up
+
         previous_note = self.brass_note  # Previous brass note
 
-        # Process on each tick
-        # Play note on the beat
-        if self.notes_since_chord_change % self.ticks_per_beat == 0:
-            curr_chord = self.brass_note_set.notes  # Current chord notes
-            brass_notes = [curr_chord[0], curr_chord[4 % len(curr_chord)]]  # Root and fifth
-            selected_note = int(choice(brass_notes))  # Select note
+        curr_chord = self.brass_note_set.notes  # Current chord notes
+        chord_notes = curr_chord.tolist()  # Convert numpy array to list
+
+        # Handle chord change by resetting arpeggio
+        if self.notes_since_chord_change == 0:
+            self.arpeggio_index = 0
+            self.arpeggio_direction = 1  # Reset direction to up
+
+        # Ensure the arpeggio index is within the valid range
+        if not hasattr(self, 'arpeggio_index'):
+            self.arpeggio_index = 0
+        if not hasattr(self, 'arpeggio_direction'):
+            self.arpeggio_direction = 1
+
+        # Play the selected note
+        if (self.notes_since_chord_change % self.ticks_per_beat) == 0 or (self.notes_since_chord_change % self.ticks_per_beat) == 2:
+            jump_interval = choices(list(range(0,4)), weights=[10, 1, 0.1, 0.05], k=1)[0]
+
+            if self.arpeggio_index + self.arpeggio_direction*jump_interval in range(len(chord_notes)):
+                selected_note = int(chord_notes[self.arpeggio_index + self.arpeggio_direction*jump_interval])  # Select the note
+            else:
+                selected_note = int(chord_notes[self.arpeggio_index])
 
             note_vel = int(self.brass_vel_sum / 4 + 40)  # Calculate velocity
 
             if previous_note is not None:
-                self.midi_handler.send_note_off(self.midi_handler.brass_out, previous_note)  # Turn off previous note
-            self.midi_handler.send_note_on(self.midi_handler.brass_out, selected_note, velocity=note_vel)  # Play new note
+                self.midi_handler.send_note_off(self.midi_handler.brass_out, previous_note)
+
+            self.midi_handler.send_note_on(self.midi_handler.brass_out, selected_note, velocity=note_vel)
 
             self.brass_history.push(notes=selected_note, velocities=note_vel)  # Update history
             self.brass_note = selected_note  # Update current note
 
             self.brass_vel_sum = (note_vel + self.brass_vel_sum * 3) / 4  # Update velocity sum
-        else:
-            # Release the note
-            if previous_note is not None:
-                self.midi_handler.send_note_off(self.midi_handler.brass_out, previous_note)  # Turn off note
-            self.brass_note = None  # Set current note to None
+
+            random_switch_direction = random()  # Random value to switch direction
+
+            # Update the arpeggio index and direction
+            if self.arpeggio_direction == 1 :
+                # Moving up
+                if self.arpeggio_index >= len(chord_notes) - 1 or random_switch_direction > 0.8: # this is when it should flip
+                    self.arpeggio_direction = -1  # Change direction to down
+                    self.arpeggio_index -= 1  # Step back
+                else:
+                    self.arpeggio_index += 1
+            else:
+                # Moving down
+                if self.arpeggio_index <= 0 or random_switch_direction > 0.8:
+                    self.arpeggio_direction = 1  # Change direction to up
+                    self.arpeggio_index += 1  # Step forward
+                else:
+                    self.arpeggio_index -= 1
 
     def process_organ(self):
         """
         Generates and plays notes for the organ voice.
         """
+        if not self.organ_active:
+            # If notes are currently playing, send note_off messages to stop them
+            for note in range(NOTE_RANGE_MIN, NOTE_RANGE_MAX + 1):
+                self.midi_handler.send_note_off(self.midi_handler.organ_out, note)
+            return  # Skip further processing since the choir is inactive
+
         previous_note = self.organ_note  # Previous organ note
+        bass_note = int(self.chord_sequence[self.current_chord_index][0])  # Bass note two octaves down
+        note_vel = int(self.organ_vel_sum / 4 + 50)  # Calculate velocity
+
+        self.midi_handler.send_note_on(self.midi_handler.organ_out, bass_note, velocity=note_vel)  # Play new note
 
         # Play note on chord change
         if self.notes_since_chord_change == 0:
-            bass_note = int(self.chord_sequence[self.current_chord_index][0] - 24)  # Bass note two octaves down
-            note_vel = int(self.organ_vel_sum / 4 + 50)  # Calculate velocity
-
             if previous_note is not None:
                 self.midi_handler.send_note_off(self.midi_handler.organ_out, previous_note)  # Turn off previous note
             self.midi_handler.send_note_on(self.midi_handler.organ_out, bass_note, velocity=note_vel)  # Play new note
@@ -481,6 +663,32 @@ class ProceduralMusicGenerator:
             self.organ_vel_sum = (note_vel + self.organ_vel_sum * 3) / 4  # Update velocity sum
         else:
             pass  # Hold the note
+
+    def process_drums(self):
+        """
+        Processes and plays drum notes based on the current tick and drum configuration.
+        """
+        current_beat = (self.notes_since_chord_change // self.ticks_per_beat) + 1 # Beat number
+        current_subdivision = (self.notes_since_chord_change % self.ticks_per_beat)  # Tick within beat
+
+        notes_to_play = []
+        hit_logs = []
+
+        if current_subdivision == 0:
+            # Downbeat
+            for drum, data in self.drum_beats.items():
+                if current_beat in data["beats"]:
+                    notes_to_play.append(data["note"])
+                    hit_logs.append(drum)
+        elif current_subdivision == 2:
+            # Upbeat
+            for drum, data in self.drum_beats.items():
+                if (current_beat + 0.5) in data["beats"]:
+                    notes_to_play.append(data["note"])
+                    hit_logs.append(drum)
+
+        if notes_to_play:
+            self.midi_handler.send_drum_notes(self.midi_handler.drums_out, notes_to_play, VELOCITY)
 
     def print_current_state(self):
         """

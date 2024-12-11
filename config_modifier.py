@@ -88,7 +88,7 @@ DRUM_COMBO_PATTERNS = {
     },
 }
 
-def modify_config(bpm=None, drums=None, voices=None, reset=False):
+def modify_config(bpm=None, drums=None, voices=None, chord_sequence=None, reset=False):
     """
     Modify the config.json file.
 
@@ -96,6 +96,7 @@ def modify_config(bpm=None, drums=None, voices=None, reset=False):
         bpm (int, optional): New BPM to set. If None, BPM remains unchanged.
         drums (str or list/set of str, optional): Drums to activate.
         voices (str or list/set of str, optional): Voices to activate.
+        chord_sequence (list of lists, optional): New chord sequence to set.
         reset (bool, optional): If True, reset the config to an empty state.
     """
     with config_lock:
@@ -104,6 +105,7 @@ def modify_config(bpm=None, drums=None, voices=None, reset=False):
             if reset:
                 default_config = {
                     "BPM": 60,
+                    "CHORD_SEQUENCE": [],
                     "DRUM_BEATS": {
                         "BASS": {"beats": [], "note": 50},
                         "SNARE": {"beats": [], "note": 48},
@@ -119,7 +121,6 @@ def modify_config(bpm=None, drums=None, voices=None, reset=False):
                 }
                 with open(CONFIG_FILE, "w") as file:
                     json.dump(default_config, file, indent=4)
-                print(f"Configuration reset to default state.")
                 return
 
             # Load the current configuration
@@ -129,7 +130,6 @@ def modify_config(bpm=None, drums=None, voices=None, reset=False):
             # Update BPM if provided
             if bpm is not None:
                 config["BPM"] = bpm
-                print(f"BPM updated to {bpm}.")
 
             # Update drum beats if drums is not None
             if drums is not None:
@@ -196,10 +196,23 @@ def modify_config(bpm=None, drums=None, voices=None, reset=False):
                         config["VOICES"][voice]["active"] = False
                         print(f"Deactivated voice: {voice}.")
 
+            # Update chord sequence if provided
+            if chord_sequence is not None:
+                config["CHORD_SEQUENCE"] = []
+                for chord in chord_sequence:
+                    if len(chord) != 2:
+                        print(f"Invalid chord format: {chord}. Expected [bass_note, chord_type].")
+                        continue
+                    bass_note, chord_type = chord
+
+                    # Validate bass_note and chord_type if necessary
+                    # For now, we assume they are valid
+                    chord_dict = {"bass": bass_note, "type": chord_type}
+                    config["CHORD_SEQUENCE"].append(chord_dict)
+
             # Save the updated configuration
             with open(CONFIG_FILE, "w") as file:
                 json.dump(config, file, indent=4)
-                print("Config updated successfully.")
 
         except FileNotFoundError:
             print(f"Configuration file {CONFIG_FILE} not found.")
