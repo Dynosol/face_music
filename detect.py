@@ -182,11 +182,11 @@ def process_face(face_results, frame):
             scaled_mouth_wideness = ((mouth_wideness_normalized - min_mouth_wideness) / (1.0 - min_mouth_wideness))
             scaled_mouth_wideness = max(0, min(scaled_mouth_wideness, 1))  # Clamp between 0 and 1
 
-            bpm = int(MIN_BPM + (scaled_mouth_wideness * (MAX_BPM - MIN_BPM)))
+            bpm = int(MIN_BPM + (scaled_mouth_wideness * (MAX_BPM - MIN_BPM))) # ======================================= MODIFY THIS ==========================================
 
             clap_distance = head_width * 3
 
-            # ==================================================================================================================================
+            # ================================================================================================================================== 
             config_modifier.modify_config(bpm=bpm)
             # ==================================================================================================================================
 
@@ -208,7 +208,7 @@ def process_face(face_results, frame):
             # Calculate eye openness
             left_eye_openness = abs(left_eye_bottom_y - left_eye_top_y)
             right_eye_openness = abs(right_eye_bottom_y - right_eye_top_y)
-            eye_max_open = head_height / 70 # some weird phenotypical stuff... but it works
+            eye_max_open = head_height / 70 # some weird phenotypical stuff... but it works ======================================= MODIFY THIS ==========================================
             lengths.append(f"Eye Max Openness: {eye_max_open:.2f}")
 
             left_closed = left_eye_openness < eye_max_open
@@ -324,7 +324,7 @@ def process_hands(hand_results, frame):
             wrist_y = wrist.y * h
             pinky_mcp_y = pinky_mcp.y * h
             palm_height_measure = max(abs(pinky_mcp_y - wrist_y), palm_height_measure)
-            pinch_threshold = min(palm_height_measure / 4, 100) # I know it's magic but it works
+            pinch_threshold = min(palm_height_measure / 4, 100) # I know it's magic but it works ======================================= MODIFY THIS ==========================================
 
             # Calculate midpoint between thumb and index finger for each hand
             index_finger_tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]

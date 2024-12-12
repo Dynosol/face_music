@@ -7,7 +7,7 @@ import math
 import MIDI_Funcs as MIDI_Funcs          # Import a custom module for MIDI utilities (assumed to handle MIDI cleanup)
 import json
 
-
+# ========================================== MAYBE MODIFY THIS!! ==================================================================================== MAYBE MODIFY THIS!! ==========================================
 DRUMS_MIDI = mido.open_output('IAC Driver Bus 10')      # Drums output port
 MELODY_MIDI = mido.open_output('IAC Driver Bus 1')      # Melody output port
 CHOIR_MIDI1 = mido.open_output('IAC Driver Bus 2')      # Choir output port 1
@@ -17,7 +17,7 @@ BRASS_MIDI = mido.open_output('IAC Driver Bus 5')       # Brass output port
 ORGAN_MIDI = mido.open_output('IAC Driver Bus 6')       # Organ output port
 
 
-# Constants defining the MIDI note range
+# Constants defining the MIDI note range # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 NOTE_RANGE_MIN = 24  # Lowest MIDI note to use (C1, MIDI note number 24)
 NOTE_RANGE_MAX = 87  # Highest MIDI note to use (D#6, MIDI note number 87)
 
@@ -43,7 +43,7 @@ for midi_number in range(128):
     note_name = note_names[note_in_octave] + str(octave)
     N[note_name] = midi_number
 
-# Define scale intervals in semitones
+# Define scale intervals in semitones # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 SCALE_SET = {
     'Major': [0, 2, 4, 5, 7, 9, 11],       # Intervals for Major scale
     'Minor': [0, 2, 3, 5, 7, 8, 10],       # Intervals for Natural Minor scale
@@ -54,7 +54,7 @@ SCALE_SET = {
     'No.': [0]                             # Single note (unison)
 }
 
-# Assign relative priorities to each note in the scales
+# Assign relative priorities to each note in the scales ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 SEVEN_NOTE_PRIORITY = [0.99, 0.3, 0.8, 0.7, 0.9, 0.3, 0.1]  # Priorities for seven-note scales
 PENT_NOTE_PRIORITY = [0.9, 0.7, 0.8, 0.8, 0.7]              # Priorities for pentatonic scales
 SCALE_ARBITRARY_PRIORITIES = {
@@ -68,7 +68,7 @@ SCALE_ARBITRARY_PRIORITIES = {
 }
 
 # Define chord intervals in semitones
-CHORD_INTERVALS = {
+CHORD_INTERVALS = { # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
     'Major': [0, 4, 7],  # Root, Major Third, Perfect Fifth
     'Minor': [0, 3, 7],  # Root, Minor Third, Perfect Fifth
     'HarmMinor': [0, 3, 7],  # Root, Minor Third, Perfect Fifth
@@ -92,7 +92,7 @@ HI_HAT_NOTE = N["A2"]
 TOM_NOTE = N["G2"]
 VELOCITY = 100
 
-# Default Drum Configuration ==================================================================================================================================
+# Default Drum Configuration 
 DRUM_BEATS = {
     "BASS": {"beats": {1, 3}, "note": BASS_NOTE},  # Hits on beats 1 and 3
     "SNARE": {"beats": {2, 4}, "note": SNARE_NOTE},  # Hits on beats 2 and 4
@@ -102,7 +102,6 @@ DRUM_BEATS = {
 BEAT_DURATION = 60 / BPM
 HALFBEAT_DELAY = 0.08
 UPBEAT_DURATION = BEAT_DURATION / 2 - HALFBEAT_DELAY
-# =============================================================================================================================================================
 
 # Function to convert MIDI note numbers to note names
 def midi_note_to_name(midi_note):
@@ -331,7 +330,7 @@ class ProceduralMusicGenerator:
 
 
 
-    def initialize_note_sets(self):
+    def initialize_note_sets(self): # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
         """Initializes separate NoteSets for each voice with appropriate ranges based on current chord."""
         base_note, scale_name = self.chord_sequence[self.current_chord_index]
 
@@ -340,22 +339,22 @@ class ProceduralMusicGenerator:
         # Melody Voice: One to three octaves above the base_note
         melody_min_note = max(base_note + 12, NOTE_RANGE_MIN)
         melody_max_note = min(base_note + 24, NOTE_RANGE_MAX)
-        self.melody_note_set = NoteSet(base_note, scale_name, min_note=melody_min_note, max_note=melody_max_note)
+        self.melody_note_set = NoteSet(base_note, scale_name, min_note=melody_min_note, max_note=melody_max_note) # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 
         # Choir Voice: From base_note up to two octaves above
         choir_min_note = max(base_note + 12, NOTE_RANGE_MIN)
         choir_max_note = min(base_note + 36, NOTE_RANGE_MAX)
-        self.choir_note_set = NoteSet(base_note, scale_name, min_note=choir_min_note, max_note=choir_max_note)
+        self.choir_note_set = NoteSet(base_note, scale_name, min_note=choir_min_note, max_note=choir_max_note) # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 
         # Brass Voice: One octave below to one octave above the base_note
         brass_min_note = max(base_note + 12, NOTE_RANGE_MIN)
         brass_max_note = min(base_note + 36, NOTE_RANGE_MAX)
-        self.brass_note_set = NoteSet(base_note, scale_name, min_note=brass_min_note, max_note=brass_max_note)
+        self.brass_note_set = NoteSet(base_note, scale_name, min_note=brass_min_note, max_note=brass_max_note) # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 
         # Organ Voice: Two octaves below up to the base_note
         organ_min_note = max(base_note + 12, NOTE_RANGE_MIN)
         organ_max_note = min(base_note + 24, NOTE_RANGE_MAX)
-        self.organ_note_set = NoteSet(base_note, scale_name, min_note=organ_min_note, max_note=organ_max_note)
+        self.organ_note_set = NoteSet(base_note, scale_name, min_note=organ_min_note, max_note=organ_max_note) # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 
     def run(self):
         """
@@ -425,15 +424,15 @@ class ProceduralMusicGenerator:
 
         play_note_odds = random()  # Base probability to play a note
 
-        density_factor = 0.8       # Higher values decrease the likelihood of playing a note
-        neighborhood_factor = 0.7  # Values between 0 and 1; lower values favor closer notes
+        density_factor = 0.8       # Higher values decrease the likelihood of playing a note ========================================== MODIFY THIS!! ==========================================
+        neighborhood_factor = 0.7  # Values between 0 and 1; lower values favor closer notes ========================================== MODIFY THIS!! ==========================================
 
-        # Increase odds on chord change or beat
+        # Increase odds on chord change or beat # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
         if notes_since_change == 0:
             play_note_odds *= 5  # Higher chance on chord change
         elif notes_since_change % self.ticks_per_beat == 0:
             play_note_odds *= 2  # Higher chance on beat
-        if (self.notes_since_chord_change % self.ticks_per_beat) == 0 or (self.notes_since_chord_change % self.ticks_per_beat) == 2:
+        if (self.notes_since_chord_change % self.ticks_per_beat) == 0 or (self.notes_since_chord_change % self.ticks_per_beat) == 2: # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
             play_note_odds *= 5
 
         do_play_note = play_note_odds > density_factor  # Decide whether to play a note
@@ -596,9 +595,9 @@ class ProceduralMusicGenerator:
         if not hasattr(self, 'arpeggio_direction'):
             self.arpeggio_direction = 1
 
-        # Play the selected note
+        # Play the selected note # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
         if (self.notes_since_chord_change % self.ticks_per_beat) == 0 or (self.notes_since_chord_change % self.ticks_per_beat) == 2:
-            jump_interval = choices(list(range(0,4)), weights=[10, 1, 0.1, 0.05], k=1)[0]
+            jump_interval = choices(list(range(0,4)), weights=[10, 1, 0.1, 0.05], k=1)[0] # ========================================== MODIFY THIS!! ==================================================================================== MODIFY THIS!! ==========================================
 
             if self.arpeggio_index + self.arpeggio_direction*jump_interval in range(len(chord_notes)):
                 selected_note = int(chord_notes[self.arpeggio_index + self.arpeggio_direction*jump_interval])  # Select the note
