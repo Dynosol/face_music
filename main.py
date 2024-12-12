@@ -2,7 +2,7 @@ import subprocess
 import sys
 from config_modifier import modify_config
 
-MAX_BPN = 240
+MAX_BPM = 240
 MIN_BPM = 60
 
 def main():

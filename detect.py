@@ -5,7 +5,7 @@ import math
 import time
 from deepface import DeepFace
 import config_modifier
-from main import MIN_BPM, MAX_BPM
+from main import MAX_BPM, MIN_BPM
 import threading
 
 N = {}# shorthand for notes
