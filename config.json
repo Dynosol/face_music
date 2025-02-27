@@ -1,6 +1,23 @@
 {
-    "BPM": 60,
-    "CHORD_SEQUENCE": [],
+    "BPM": 161,
+    "CHORD_SEQUENCE": [
+        {
+            "bass": 36,
+            "type": "Major"
+        },
+        {
+            "bass": 38,
+            "type": "Minor"
+        },
+        {
+            "bass": 45,
+            "type": "Minor"
+        },
+        {
+            "bass": 43,
+            "type": "Major"
+        }
+    ],
     "DRUM_BEATS": {
         "BASS": {
             "beats": [],
