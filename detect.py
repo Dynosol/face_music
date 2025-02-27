@@ -109,7 +109,7 @@ left_eye_text = "Closed?"
 right_eye_text = "Closed?"
 
 # Initialize the webcam
-video_capture = cv2.VideoCapture(1)
+video_capture = cv2.VideoCapture(0)
 
 finger_names = {
     mp_hands.HandLandmark.INDEX_FINGER_TIP: "Index Finger",
