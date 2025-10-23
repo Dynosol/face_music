@@ -2,7 +2,9 @@
 
 Generate music dynamically based on your face and hands using computer vision and real-time audio synthesis.
 
-[![Usage example!](https://img.youtube.com/vi/0CHTdzLosq8/0.jpg)](https://www.youtube.com/watch?v=0CHTdzLosq8)
+<a href="https://www.youtube.com/watch?v=0CHTdzLosq8" target="_blank">
+  <img src="https://img.youtube.com/vi/0CHTdzLosq8/0.jpg" alt="Watch the video" width="640" />
+</a>
 
 ## Features
 
