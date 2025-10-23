@@ -2,6 +2,8 @@
 
 Generate music dynamically based on your face and hands using computer vision and real-time audio synthesis.
 
+[![Usage example!](https://img.youtube.com/vi/0CHTdzLosq8/0.jpg)](https://www.youtube.com/watch?v=0CHTdzLosq8)
+
 ## Features
 
 - Play music based on your face and hands
